@@ -35,6 +35,9 @@ Upload your CV as a Word file once. Open an ad on Platsbanken or Indeed and clic
 
 Meritio never invents experience and never touches your layout. Missing something? You get a question, not a fabrication. Your CV is stored in the EU and can be deleted at any time.
 
+## Source code (AGPL-3.0) – link to include at the end of the description
+Källkod: https://github.com/Aliabdihakim/meritio-extension (AGPL-3.0). Tillägget bygger på SuperDoc.
+
 ## Category
 Productivity
 
