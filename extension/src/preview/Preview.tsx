@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CvParagraphsResponse } from "@meritio/shared";
 import { useAdaptation, loadPersistedDoc, savePersistedDoc, type PersistedDoc } from "../shared/adaptationStore";
 import { api } from "../sidepanel/api";
-import { GapCard } from "./GapCard";
 import { liveMatch } from "../shared/match";
 import { SuperDocEditor, type EditorHandle, type UserChange } from "../editor/SuperDocEditor";
+import { Chat } from "./Chat";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -23,6 +23,18 @@ export function Preview() {
   const [status, setStatus] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<"pdf" | "docx" | null>(null);
   const [active, setActive] = useState<string | null>(null);
+  const [showReqs, setShowReqs] = useState(false);
+  const [autoOpenChat, setAutoOpenChat] = useState(false);
+  useEffect(() => {
+    if (!adId || !stored) return;
+    const key = `chatShown:${adId}`;
+    chrome.storage.session.get(key).then((r) => {
+      if (r[key]) return;
+      const hasGaps = stored.response.gaps.some((g) => { const d = stored.decisions.gaps[g.id]; return !(d?.status === "added" && d.text.trim()); });
+      if (hasGaps) { setAutoOpenChat(true); chrome.storage.session.set({ [key]: true }); }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adId, !!stored]);
   const [changes, setChanges] = useState<UserChange[]>([]);
   const editor = useRef<EditorHandle>(null);
   const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
@@ -84,9 +96,23 @@ export function Preview() {
         <h1>Meritio</h1>
         <span className="ad"><strong>{ad.title}</strong> · {ad.employer}</span>
         {match.total > 0 && (
-          <span className="matchpill" title="Krav i annonsen som ditt CV täcker, inklusive det du lagt till">
-            <span className="bar"><i style={{ width: `${pct}%` }} /></span>
-            {match.covered} av {match.total} krav
+          <span className="pillwrap">
+            <button className={`matchpill ${match.missing + match.partial > 0 ? "warn" : ""}`} onClick={() => setShowReqs((v) => !v)} title="Visa annonsens krav">
+              <span className="bar"><i style={{ width: `${pct}%` }} /></span>
+              {match.covered} av {match.total} krav <span className="caret">▾</span>
+            </button>
+            {showReqs && (
+              <div className="reqs-pop" onMouseLeave={() => setShowReqs(false)}>
+                {stored.response.fit && <p className="fit">{stored.response.fit}</p>}
+                <ul className="reqs">
+                  {(stored.response.requirements ?? []).map((q) => {
+                    const answered = gaps.some((g) => (g.requirementId ?? g.id) === q.id && stored.decisions.gaps[g.id]?.status === "added" && stored.decisions.gaps[g.id]?.text.trim());
+                    const st = answered ? "covered" : q.status;
+                    return <li key={q.id} className={`req ${st}`} title={q.evidence ? `I ditt CV: ${q.evidence}` : undefined}><i>{st === "covered" ? "✓" : st === "partial" ? "~" : "–"}</i><span>{q.text}{answered && <em> · tillagt</em>}</span></li>;
+                  })}
+                </ul>
+              </div>
+            )}
           </span>
         )}
         <span className="spacer" />
@@ -104,9 +130,9 @@ export function Preview() {
         <span className="doc-hint">Förslagen ligger som spårade ändringar i texten, med motiveringen i bubblan. Acceptera eller avvisa dem där. Det du skriver själv spåras på samma sätt.</span>
       </div>
 
-      <div className="layout" style={{ gridTemplateColumns: `minmax(0, 1fr) 8px ${sideWidth}px` }}>
+      <div className="layout single">
         <div className="doc">
-          {canEdit && toolbarEl ? (
+          {canEdit ? (
             <SuperDocEditor
               ref={editor}
               toolbarEl={toolbarEl}
@@ -121,44 +147,8 @@ export function Preview() {
             <div className="doc-loading">Öppnar ditt CV…</div>
           )}
         </div>
-        <div className="divider" onMouseDown={onDragStart} title="Dra för att ändra bredd" />
-
-        <aside className="side">
-          {(stored.response.fit || (stored.response.requirements ?? []).length > 0) && (
-            <section className="panel">
-              <h3>Annonsens krav</h3>
-              {stored.response.fit && <p className="fit">{stored.response.fit}</p>}
-              <ul className="reqs">
-                {(stored.response.requirements ?? []).map((q) => {
-                  const answered = gaps.some((g) => (g.requirementId ?? g.id) === q.id && stored.decisions.gaps[g.id]?.status === "added" && stored.decisions.gaps[g.id]?.text.trim());
-                  const st = answered ? "covered" : q.status;
-                  return (
-                    <li key={q.id} className={`req ${st}`} title={q.evidence ? `I ditt CV: ${q.evidence}` : undefined}>
-                      <i>{st === "covered" ? "✓" : st === "partial" ? "~" : "–"}</i>
-                      <span>{q.text}{answered && <em> · tillagt</em>}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
-
-          <section className="panel">
-            <h3>Saknas eller delvis – har du det?</h3>
-            <p className="hint">Välj var det hör hemma och berätta med egna ord, så formulerar Meritio raden i din stil.</p>
-            {gaps.map((g, i) => (
-              <GapCard
-                key={g.id} label={LETTERS[i] ?? String(i + 1)} gap={g} decision={stored.decisions.gaps[g.id]} cv={cv} adId={ad.id}
-                active={active === g.id}
-                onChange={(d) => setGap(g.id, d)}
-                onHover={() => setActive(g.id)} onClick={() => focus(g.id)}
-              />
-            ))}
-            {gaps.length === 0 && <p className="muted">Ditt CV täcker allt annonsen efterfrågar.</p>}
-          </section>
-
-        </aside>
       </div>
+      <Chat adId={ad.id} stored={stored} editor={editor} onError={setError} autoOpen={autoOpenChat} onGapAnswered={(id, d) => setGap(id, d)} />
     </>
   );
 }

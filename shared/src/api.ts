@@ -131,6 +131,8 @@ export interface GapDecision {
   answer?: string;
   /** Where it goes: "skills" | "summary" | "experience.<index>" */
   placement?: string;
+  /** Answered in the chat; the line was inserted by the chat itself, so the editor must not insert it again. */
+  viaChat?: boolean;
 }
 
 export interface GapWriteRequest {
@@ -198,4 +200,28 @@ export interface ExportItem {
   adUrl: string;
   format: "pdf" | "docx";
   createdAt: string;
+}
+
+/** One operation the assistant wants applied in the document (the browser applies it as a tracked change). */
+export type ChatOp =
+  | { type: "replace"; find: string; text: string; note?: string }
+  | { type: "insertAfter"; anchor: string; text: string; note?: string }
+  | { type: "delete"; find: string; note?: string };
+
+export interface ChatMessage { role: "user" | "assistant"; content: string }
+
+export interface ChatRequest {
+  adId: string;
+  messages: ChatMessage[];
+  /** Plain text of the document as it currently reads (so the assistant sees the user's edits too). */
+  document: string;
+  /** Text the user has selected, if any. */
+  selection?: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  ops: ChatOp[];
+  /** New things the user told us about themselves, to remember for future ads. */
+  facts: { requirement: string; answer: string; text: string; placement: string }[];
 }

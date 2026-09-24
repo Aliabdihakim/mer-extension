@@ -183,6 +183,15 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
         )}
 
         {data?.fit && <p className="fit">{data.fit}</p>}
+        {(data?.requirements?.length ?? 0) > 0 && (
+          <ul className="reqs">
+            {data!.requirements.map((q) => {
+              const answered = data!.gaps.some((g) => (g.requirementId ?? g.id) === q.id && stored?.decisions.gaps[g.id]?.status === "added" && stored?.decisions.gaps[g.id]?.text.trim());
+              const st = answered ? "covered" : q.status;
+              return <li key={q.id} className={`req ${st}`} title={q.evidence ? `I ditt CV: ${q.evidence}` : undefined}><i>{st === "covered" ? "✓" : st === "partial" ? "~" : "–"}</i><span>{q.text}</span></li>;
+            })}
+          </ul>
+        )}
 
         {(total > 0 || hasMatch) && (
           <div className="chips">

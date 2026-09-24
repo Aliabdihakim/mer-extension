@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
 import { SuperDoc, DOCX } from "superdoc";
-import type { StoredAdaptation, GapSuggestion, Rewrite } from "@meritio/shared";
+import type { StoredAdaptation, GapSuggestion, Rewrite, ChatOp } from "@meritio/shared";
 import type { Mapping, Para } from "./docState";
 import { bundledFamilies, fontMap, fontOptions } from "./fonts";
 
@@ -8,6 +8,12 @@ import { bundledFamilies, fontMap, fontOptions } from "./fonts";
 export interface UserChange { id: string; type: string; text: string }
 
 export interface EditorHandle {
+  /** Plain text of the document as it currently reads. */
+  documentText(): Promise<string>;
+  /** Currently selected text, if any. */
+  selectionText(): Promise<string>;
+  /** Apply assistant operations as tracked changes with a note bubble. Returns how many applied. */
+  applyOps(ops: ChatOp[]): Promise<number>;
   /** Final document (all open tracked changes accepted, reason comments removed) as base64 DOCX. */
   exportFinal(): Promise<string>;
   /** Accept every open tracked change. */
@@ -63,7 +69,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
     const instance = new SuperDoc({
       selector: host.current,
       document: { data: new Blob([source as BlobPart], { type: DOCX }), type: DOCX, name: "cv.docx" },
-      documentMode: "suggesting",
+      documentMode: "editing",
       user: { name: "Du", email: "you@meritio.app" },
       fonts: { families: bundledFamilies, map: fontMap() },
       ui: { toolbar: { container: p.toolbarEl ?? undefined, fontOptions } },
@@ -115,6 +121,48 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
     const m = await doc.query.match({ select: { type: "text", pattern, caseSensitive: true }, require: "first" });
     const it = m?.items?.[0];
     return it && it.matchKind === "text" ? it : null;
+  };
+
+  /**
+   * Font and paragraph style of the text at `anchorText`, from the match result's resolved run styles,
+   * so inserted lines look exactly like their neighbours.
+   */
+  const styleAt = async (anchorText: string): Promise<{ run: any; styleId?: string } | null> => {
+    const doc = docRef.current;
+    const tail = anchorText.trim().split(/\s+/).slice(-6).join(" ");
+    try {
+      const m = await doc.query.match({ select: { type: "text", pattern: tail, caseSensitive: true }, require: "first" });
+      const it = m?.items?.[0];
+      if (!it || it.matchKind !== "text") return null;
+      const b = it.blocks?.[0];
+      const st = b?.runs?.[0]?.styles;
+      const run: any = {};
+      if (st?.fontFamily) run.fontFamily = st.fontFamily;
+      if (st?.fontSizePt) run.fontSize = st.fontSizePt;
+      if (st?.effective?.bold) run.bold = true;
+      if (st?.effective?.italic) run.italic = true;
+      return { run, styleId: b?.paragraphStyle?.styleId };
+    } catch { return null; }
+  };
+
+  /** A paragraph carrying `text` in the same style as the paragraph containing `anchorText`. */
+  const paragraphLike = async (anchorNode: any, anchorText: string, text: string): Promise<any> => {
+    const style = await styleAt(anchorText);
+    const clone = cloneParagraphWithText(anchorNode, text);
+    if (clone) {
+      // fill in font/size explicitly when the cloned run doesn't carry them (they were inherited before)
+      const body = clone.kind === "paragraph" ? clone.paragraph : clone.heading;
+      const run = body?.inlines?.[0]?.run;
+      if (run && style) run.props = { ...(style.run ?? {}), ...(run.props ?? {}) };
+      return clone;
+    }
+    return {
+      kind: "paragraph",
+      paragraph: {
+        ...(style?.styleId ? { styleRef: style.styleId } : {}),
+        inlines: [{ kind: "run", run: { text, ...(style?.run && Object.keys(style.run).length ? { props: style.run } : {}) } }],
+      },
+    };
   };
 
   /** Run a mutation and return the tracked-change ids it created. */
@@ -218,13 +266,8 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
     } else {
       let node: any = null;
       try { node = (await doc.getNodeById({ nodeId: block.nodeId })).node; } catch {}
-      const clone = cloneParagraphWithText(node, text);
-      ids = await tracked(() =>
-        clone
-          ? doc.insert({ target: blockAddr, placement: "after", content: clone }, { changeMode: "tracked" })
-          : doc.insert({ target: blockAddr, placement: "after", value: `<p>${escapeHtml(text)}</p>`, type: "html" }, { changeMode: "tracked" }),
-      );
-      if (!clone) console.warn("[meritio] gap inserted without style copy; anchor node kind:", node?.kind);
+      const content = await paragraphLike(node, visibleText(block), text);
+      ids = await tracked(() => doc.insert({ target: blockAddr, placement: "after", content }, { changeMode: "tracked" }));
     }
     if (!ids.length) { propsRef.current.onError(`Raden för "${g.requirement}" kunde inte läggas in.`); return; }
     tcMap.current[g.id] = ids;
@@ -256,6 +299,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
       }
       for (const g of stored.response.gaps) {
         const gd = stored.decisions.gaps[g.id];
+        if (gd?.viaChat) continue; // the chat already put this into the document
         const on = gd?.status === "added" && !!gd.text.trim();
         const placement = gd?.placement ?? (g.suggestedSection === "experience" ? "experience.0" : g.suggestedSection);
         const want = on ? `${placement}|${gd!.text.trim()}` : "";
@@ -273,6 +317,60 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
   }, [ready, p.stored]);
 
   useImperativeHandle(ref, () => ({
+    async documentText() {
+      await busy.current;
+      const doc = docRef.current; if (!doc) return "";
+      try { return String(await doc.getText({})); }
+      catch { const b = (await doc.extract({})).blocks as any[]; return b.map((x) => x.text).join("\n"); }
+    },
+    async selectionText() {
+      const doc = docRef.current; if (!doc) return "";
+      try { const sel = await doc.selection.current(); return String(sel?.text ?? ""); } catch { return ""; }
+    },
+    async applyOps(ops) {
+      let n = 0;
+      await queue(async () => {
+        const doc = docRef.current; if (!doc) return;
+        for (const op of ops) {
+          try {
+            if (op.type === "replace") {
+              const it = await findText(op.find) ?? (await findText(op.find.split(/\s+/).slice(0, 6).join(" ")));
+              if (!it) continue;
+              const ids = await tracked(() => doc.replace({ target: it.target, text: op.text }, { changeMode: "tracked" }));
+              if (ids[0] && op.note) { try { await doc.comments.create({ trackedChangeId: ids[0], text: `På din begäran: ${op.note}` }); } catch {} }
+              n++;
+            } else if (op.type === "delete") {
+              const it = await findText(op.find);
+              if (!it) continue;
+              const ids = await tracked(() => doc.delete({ target: it.target }, { changeMode: "tracked" }));
+              if (ids[0] && op.note) { try { await doc.comments.create({ trackedChangeId: ids[0], text: `På din begäran: ${op.note}` }); } catch {} }
+              n++;
+            } else if (op.type === "insertAfter") {
+              // Multi-line text (e.g. a job title line + a bullet) becomes one paragraph per line, in order.
+              const lines = op.text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+              let anchorText = op.anchor;
+              let first = true;
+              for (const line of lines) {
+                const block = await findBlock(anchorText);
+                if (!block) break;
+                const addr = { kind: "block", nodeType: block.type === "heading" || block.type === "listItem" ? block.type : "paragraph", nodeId: block.nodeId };
+                let node: any = null;
+                try { node = (await doc.getNodeById({ nodeId: block.nodeId })).node; } catch {}
+                const content = await paragraphLike(node, visibleText(block), line);
+                const ids = await tracked(() => doc.insert({ target: addr, placement: "after", content }, { changeMode: "tracked" }));
+                if (first && ids[0] && op.note) { try { await doc.comments.create({ trackedChangeId: ids[0], text: `På din begäran: ${op.note}` }); } catch {} }
+                first = false;
+                anchorText = line; // the next line goes after the one just inserted
+              }
+              if (!first) n++;
+            }
+          } catch (e) { console.warn("[meritio] chat op failed", op, e); }
+        }
+        await refreshUserChanges();
+      });
+      schedulePersist();
+      return n;
+    },
     async exportFinal() {
       await busy.current;
       // SuperDoc.export strips comments ("clean") and applies open tracked changes (final).

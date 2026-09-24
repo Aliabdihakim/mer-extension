@@ -1,4 +1,4 @@
-import type { AdaptEvent, AdaptRequest, AdaptResponse, AuthRequest, AuthResponse, Cv, CvParagraphsResponse, CvParseResponse, Decisions, ExportItem, GapWriteRequest, GapWriteResponse, MeResponse } from "@meritio/shared";
+import type { AdaptEvent, AdaptRequest, AdaptResponse, AuthRequest, AuthResponse, ChatRequest, ChatResponse, Cv, CvParagraphsResponse, CvParseResponse, Decisions, ExportItem, GapWriteRequest, GapWriteResponse, MeResponse } from "@meritio/shared";
 import { API_BASE } from "../config";
 
 interface Tokens { accessToken: string; refreshToken: string; email: string }
@@ -91,6 +91,7 @@ export const api = {
   exportFile: (id: string) => requestBlob(`/exports/${id}/file`),
   deleteExport: (id: string) => request<{ ok: true }>(`/exports/${id}`, { method: "DELETE" }),
   saveCv: (cv: Cv) => request<{ id: string }>("/cv", { method: "PUT", body: JSON.stringify({ cv }) }),
+  chat: (body: ChatRequest) => request<ChatResponse>("/chat", { method: "POST", body: JSON.stringify(body) }),
   saveFact: (body: { requirement: string; answer: string; text: string; placement: string }) =>
     request<{ id: string }>("/facts", { method: "POST", body: JSON.stringify(body) }),
   writeGap: (body: GapWriteRequest) => request<GapWriteResponse>("/gaps/write", { method: "POST", body: JSON.stringify(body) }),
