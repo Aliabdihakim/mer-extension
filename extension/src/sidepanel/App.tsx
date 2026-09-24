@@ -93,7 +93,7 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
     <p className="foot">
       <a onClick={() => setShowCvs(true)}>Mina CV</a>
       <a onClick={() => setShowUpload(true)}>Byt CV</a>
-      <a href="https://github.com/Aliabdihakim/meritio-extension" target="_blank" rel="noreferrer" title="Tilläggets källkod (AGPL-3.0)">Källkod</a>
+      <a href="https://github.com/Aliabdihakim/mer-extension" target="_blank" rel="noreferrer" title="Tilläggets källkod (AGPL-3.0)">Källkod</a>
       {!me.stub && <a onClick={onLogout}>Logga ut</a>}
     </p>
   );
