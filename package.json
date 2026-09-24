@@ -1,0 +1,10 @@
+{
+  "name": "meritio-extension",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "workspaces": ["shared", "extension"],
+  "scripts": {
+    "build": "npm run build -w shared && npm run build -w extension",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
