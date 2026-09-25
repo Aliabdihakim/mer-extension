@@ -21,6 +21,9 @@ export function Chat({ adId, stored, editor, onError, onGapAnswered, autoOpen }:
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(true);
+  /** Closed with the ✕: focusing the field no longer pops the panel back up until the user sends something. */
+  const closedByUser = useRef(false);
+  const close = () => { closedByUser.current = true; setOpen(false); };
   void autoOpen;
   /** Gap being answered via the chips flow: which requirement, and where the user chose to put it. */
   const [pending, setPending] = useState<{ gap: GapSuggestion; placement?: string; label?: string } | null>(null);
@@ -50,6 +53,7 @@ export function Chat({ adId, stored, editor, onError, onGapAnswered, autoOpen }:
     const t = answering ? `Angående "${answering.gap.requirement}" (Placering: ${answering.label}): ${t0}` : t0;
     const next: ChatMessage[] = [...messages, { role: "user", content: t }];
     setPending(null);
+    closedByUser.current = false;
     setMessages(next); setInput(""); setBusy(true); setOpen(true);
     try {
       const [document, selection] = await Promise.all([editor.current.documentText(), editor.current.selectionText()]);
@@ -96,6 +100,10 @@ export function Chat({ adId, stored, editor, onError, onGapAnswered, autoOpen }:
     <div className={`chatbar ${open ? "open" : ""}`} ref={box}>
       {open && (
         <div className="chat-pop">
+          <div className="chat-head">
+            <span className="chat-title"><span className="chat-mark">M</span>Meritio</span>
+            <button type="button" className="chat-close" title="Stäng" aria-label="Stäng chatten" onClick={close}>✕</button>
+          </div>
           <div className="chat-log" ref={log}>
             {openGaps.length > 0 && (
               <div className="msg assistant gaps">
@@ -122,11 +130,11 @@ export function Chat({ adId, stored, editor, onError, onGapAnswered, autoOpen }:
         </div>
       )}
       <form className="chat-pill" onSubmit={(e) => { e.preventDefault(); send(input); }}>
-        <button type="button" className="chat-icon" title={open ? "Stäng" : "Öppna chatten"} onClick={() => setOpen((o) => !o)}>
+        <button type="button" className="chat-icon" title={open ? "Stäng" : "Öppna chatten"} onClick={() => (open ? close() : (closedByUser.current = false, setOpen(true)))}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.5-4.5A8 8 0 1 1 21 12z"/></svg>
           {openGaps.length > 0 && !open && <span className="dotbadge">{openGaps.length}</span>}
         </button>
-        <input ref={field} value={input} placeholder="Fråga Meritio eller be om en ändring…" disabled={busy} onFocus={() => setOpen(true)} onChange={(e) => setInput(e.target.value)} />
+        <input ref={field} value={input} placeholder="Fråga Meritio eller be om en ändring…" disabled={busy} onFocus={() => { if (!closedByUser.current) setOpen(true); }} onChange={(e) => setInput(e.target.value)} />
         <button className="chat-send" disabled={busy || !input.trim()} title="Skicka">↑</button>
       </form>
     </div>
