@@ -140,8 +140,9 @@ body { margin: 0; background: #e8ecf3; padding: 0 0 40px; }
 /* ---- review bubbles: Meritio avatar + name, reason as the main text, SuperDoc summary muted ---- */
 .sd-host .user-timestamp, .sd-host .imported-tag { display: none !important; }
 .sd-host .comment-header-left { display: flex !important; align-items: center; gap: 6px; }
-.sd-host .comment-header .avatar { width: 18px !important; height: 18px !important; min-width: 18px; border-radius: 5px !important; overflow: hidden; font-size: 9px; }
-.sd-host .comment-header .avatar img, .sd-host .comment-header .user-bg { width: 100% !important; height: 100% !important; object-fit: cover; }
+.sd-host .comment-header .avatar { position: relative; width: 18px !important; height: 18px !important; min-width: 18px; border-radius: 5px !important; overflow: hidden; background: linear-gradient(135deg, #1d4ed8, #7c3aed) !important; }
+.sd-host .comment-header .avatar > * { display: none !important; }
+.sd-host .comment-header .avatar::after { content: "M"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 10px; line-height: 1; }
 .sd-host .comment-header .user-name { font-size: 11.5px; font-weight: 600; color: #0f172a; }
 .sd-host .comment-header { padding-bottom: 4px !important; min-height: 0 !important; }
 /* SuperDoc's own "Replaced … with …" summary: small and muted; the document already shows the diff */

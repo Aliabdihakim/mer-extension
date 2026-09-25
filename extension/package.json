@@ -7,7 +7,7 @@
     "dev": "vite build --watch --mode development",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "zip": "cd dist && zip -qr ../meritio-extension.zip . && cd .. && ls -la meritio-extension.zip",
+    "zip": "rm -f meritio-extension.zip && cd dist && zip -qr ../meritio-extension.zip . && cd .. && ls -la meritio-extension.zip",
     "release": "npm run build && npm run zip && bash ../scripts/publish-extension.sh && git -C ../../meritio-extension push origin main"
   },
   "dependencies": {
