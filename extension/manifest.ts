@@ -12,7 +12,7 @@ export default defineManifest({
   background: { service_worker: "src/background/worker.ts", type: "module" },
   side_panel: { default_path: "src/sidepanel/index.html" },
   web_accessible_resources: [
-    { resources: ["src/preview/index.html", "assets/*", "fonts/*"], matches: ["https://arbetsformedlingen.se/*", "https://*.indeed.com/*"] },
+    { resources: ["src/preview/index.html", "assets/*", "fonts/*", "icons/*"], matches: ["https://arbetsformedlingen.se/*", "https://*.indeed.com/*"] },
   ],
   content_scripts: [
     {

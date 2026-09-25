@@ -4,6 +4,11 @@ import type { StoredAdaptation, GapSuggestion, Rewrite, ChatOp } from "@meritio/
 import type { Mapping, Para } from "./docState";
 import { bundledFamilies, fontMap, fontOptions } from "./fonts";
 
+/** Every tracked change and bubble in the editor comes from Meritio, shown with our logo. */
+const MERITIO_ICON = typeof chrome !== "undefined" && chrome.runtime?.getURL ? chrome.runtime.getURL("icons/icon128.png") : "/icons/icon128.png";
+const MERITIO_USER = { name: "Meritio", email: "noreply@meritiocv.se", image: MERITIO_ICON };
+const MERITIO_AUTHOR = { author: "Meritio", authorEmail: "noreply@meritiocv.se", authorImage: MERITIO_ICON };
+
 /** One of the user's own tracked changes, as listed for the sidebar. */
 export interface UserChange { id: string; type: string; text: string }
 
@@ -70,7 +75,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
       selector: host.current,
       document: { data: new Blob([source as BlobPart], { type: DOCX }), type: DOCX, name: "cv.docx" },
       documentMode: "editing",
-      user: { name: "Du", email: "you@meritio.app" },
+      user: MERITIO_USER,
       fonts: { families: bundledFamilies, map: fontMap() },
       ui: { toolbar: { container: p.toolbarEl ?? undefined, fontOptions } },
       onReady: () => {
@@ -192,7 +197,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
     tcMap.current[r.id] = ids;
     // The reason travels with the change as a comment on it (stripped from the final export).
     const reason = "Motivering: " + [r.why || r.reason, r.adds && `Lyfter fram ${lc(r.adds)}`, r.removes && `tonar ner ${lc(r.removes)}`].filter(Boolean).join(". ").replace(/\.\./g, ".");
-    if (ids[0] && reason) { try { await doc.comments.create({ trackedChangeId: ids[0], text: reason }); } catch (e) { console.warn("[meritio] comment", e); } }
+    if (ids[0] && reason) { try { await doc.comments.create({ trackedChangeId: ids[0], text: reason, ...MERITIO_AUTHOR }); } catch (e) { console.warn("[meritio] comment", e); } }
   };
 
   const rejectIds = async (ids: string[]) => {
@@ -337,13 +342,13 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
               const it = await findText(op.find) ?? (await findText(op.find.split(/\s+/).slice(0, 6).join(" ")));
               if (!it) continue;
               const ids = await tracked(() => doc.replace({ target: it.target, text: op.text }, { changeMode: "tracked" }));
-              if (ids[0] && op.note) { try { await doc.comments.create({ trackedChangeId: ids[0], text: `På din begäran: ${op.note}` }); } catch {} }
+              if (ids[0] && op.note) { try { await doc.comments.create({ trackedChangeId: ids[0], text: `På din begäran: ${op.note}`, ...MERITIO_AUTHOR }); } catch {} }
               n++;
             } else if (op.type === "delete") {
               const it = await findText(op.find);
               if (!it) continue;
               const ids = await tracked(() => doc.delete({ target: it.target }, { changeMode: "tracked" }));
-              if (ids[0] && op.note) { try { await doc.comments.create({ trackedChangeId: ids[0], text: `På din begäran: ${op.note}` }); } catch {} }
+              if (ids[0] && op.note) { try { await doc.comments.create({ trackedChangeId: ids[0], text: `På din begäran: ${op.note}`, ...MERITIO_AUTHOR }); } catch {} }
               n++;
             } else if (op.type === "insertAfter") {
               // Multi-line text (e.g. a job title line + a bullet) becomes one paragraph per line, in order.
@@ -358,7 +363,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
                 try { node = (await doc.getNodeById({ nodeId: block.nodeId })).node; } catch {}
                 const content = await paragraphLike(node, visibleText(block), line);
                 const ids = await tracked(() => doc.insert({ target: addr, placement: "after", content }, { changeMode: "tracked" }));
-                if (first && ids[0] && op.note) { try { await doc.comments.create({ trackedChangeId: ids[0], text: `På din begäran: ${op.note}` }); } catch {} }
+                if (first && ids[0] && op.note) { try { await doc.comments.create({ trackedChangeId: ids[0], text: `På din begäran: ${op.note}`, ...MERITIO_AUTHOR }); } catch {} }
                 first = false;
                 anchorText = line; // the next line goes after the one just inserted
               }
