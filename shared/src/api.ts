@@ -170,9 +170,11 @@ export interface MeResponse {
   stub: boolean;
   email: string;
   hasCv: boolean;
-  plan: "trial" | "monthly" | "pass3m" | "none";
+  plan: "monthly" | "pass3m" | "none";
   /** Whether the user may adapt and download right now. */
   entitled: boolean;
+  /** Inside the free days of a subscription (card on file, nothing charged yet). */
+  trialing: boolean;
   trialEnds?: string | null;
   planEnds?: string | null;
 }

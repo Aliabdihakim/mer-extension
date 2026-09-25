@@ -83,12 +83,12 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
   const SITE = import.meta.env.VITE_SITE_URL ?? "http://localhost:3000";
   const daysLeft = me.trialEnds ? Math.max(0, Math.ceil((new Date(me.trialEnds).getTime() - Date.now()) / 86_400_000)) : null;
   const planLine =
-    me.plan === "trial" ? (daysLeft === null ? "Provperiod" : `Provperiod · ${daysLeft} dagar kvar`)
+    me.trialing && daysLeft !== null ? `Provperiod · ${daysLeft} dagar kvar`
     : me.plan === "monthly" ? "Månad" : me.plan === "pass3m" ? "3 månader" : "Ingen aktiv plan";
   const header = (
     <Brand right={<>{me.email.split("@")[0]}{me.stub ? " · stub" : ""}<br /><a href={`${SITE}/konto`} target="_blank" rel="noreferrer">{planLine}</a></>} />
   );
-  const paywall = !me.entitled || error?.includes("provperiod");
+  const paywall = !me.entitled || error?.includes("Ingen aktiv plan");
   const foot = (
     <p className="foot">
       <a onClick={() => setShowCvs(true)}>Mina CV</a>
@@ -103,9 +103,9 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
       <>
         {header}
         <div className="card">
-          <div className="eyebrow">Provperioden är slut</div>
-          <div className="title">Fortsätt anpassa ditt CV</div>
-          <p className="sub" style={{ marginTop: 6 }}>99 kr/mån eller 199 kr för 3 månader. Avsluta när du vill.</p>
+          <div className="eyebrow">Ingen aktiv plan</div>
+          <div className="title">Välj plan för att komma igång</div>
+          <p className="sub" style={{ marginTop: 6 }}>De första 7 dagarna är gratis. Sedan 99 kr/mån eller 199 kr för 3 månader. Avsluta när du vill.</p>
           <a className="primary big btn-link" href={`${SITE}/konto`} target="_blank" rel="noreferrer">Välj plan</a>
         </div>
         {foot}
