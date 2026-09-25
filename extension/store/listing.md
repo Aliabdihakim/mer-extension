@@ -26,7 +26,7 @@ Det Meritio aldrig gör:
 • Svenska och engelska.
 • Ditt CV lagras i EU. Radera allt när som helst.
 
-Gratis i 7 dagar. Sedan 99 kr/mån eller 199 kr/3 mån. Studenter 49 kr/mån med Mecenat.
+Gratis i 7 dagar. Sedan 99 kr/mån eller 199 kr/3 mån.
 
 ## Description (English)
 Meritio tailors your CV to the job ad you're reading – without rewriting it.

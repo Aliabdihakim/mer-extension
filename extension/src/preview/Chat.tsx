@@ -4,9 +4,6 @@ import { api } from "../sidepanel/api";
 import type { EditorHandle } from "../editor/SuperDocEditor";
 
 const STARTERS = ["Vilka krav saknar jag helt?", "Gör profiltexten kortare", "Jag har mer erfarenhet som inte står i CV:t"];
-const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-const toks = (s: string) => new Set(norm(s).split(" ").filter((t) => t.length >= 3));
-function overlap(a: string, b: string) { const A = toks(a), B = toks(b); if (!A.size || !B.size) return 0; let n = 0; for (const t of A) if (B.has(t)) n++; return n / Math.min(A.size, B.size); }
 
 interface Props {
   adId: string;
@@ -49,7 +46,8 @@ export function Chat({ adId, stored, editor, onError, onGapAnswered, autoOpen }:
   async function send(text: string) {
     const t0 = text.trim();
     if (!t0 || busy || !editor.current) return;
-    const t = pending?.placement ? `Angående "${pending.gap.requirement}" (Placering: ${pending.label}): ${t0}` : t0;
+    const answering = pending?.placement ? pending : null;
+    const t = answering ? `Angående "${answering.gap.requirement}" (Placering: ${answering.label}): ${t0}` : t0;
     const next: ChatMessage[] = [...messages, { role: "user", content: t }];
     setPending(null);
     setMessages(next); setInput(""); setBusy(true); setOpen(true);
@@ -57,14 +55,15 @@ export function Chat({ adId, stored, editor, onError, onGapAnswered, autoOpen }:
       const [document, selection] = await Promise.all([editor.current.documentText(), editor.current.selectionText()]);
       const r = await api.chat({ adId, messages: next, document, selection: selection || undefined });
       let reply = r.reply;
+      let applied = 0;
       if (r.ops.length) {
-        const n = await editor.current.applyOps(r.ops);
-        if (n < r.ops.length) reply += `\n(${r.ops.length - n} ändring${r.ops.length - n === 1 ? "" : "ar"} kunde inte placeras i dokumentet.)`;
+        applied = await editor.current.applyOps(r.ops);
+        if (applied < r.ops.length) reply += `\n(${r.ops.length - applied} ändring${r.ops.length - applied === 1 ? "" : "ar"} kunde inte placeras i dokumentet.)`;
       }
-      // A remembered fact that matches an open gap counts that gap as answered (the chat already inserted the line).
-      for (const f of r.facts) {
-        const g = openGaps.find((x) => overlap(x.requirement, f.requirement) >= 0.5);
-        if (g) onGapAnswered(g.id, { status: "added", text: f.text, answer: f.answer, placement: f.placement, viaChat: true });
+      // The gap was answered through the chat and the line is already in the document: don't insert it again.
+      if (answering && applied > 0) {
+        const inserted = r.ops.find((o) => o.type !== "delete") as { text?: string } | undefined;
+        onGapAnswered(answering.gap.id, { status: "added", text: inserted?.text ?? t0, answer: t0, placement: answering.placement, viaChat: true });
       }
       setMessages([...next, { role: "assistant", content: reply }]);
     } catch (e) {

@@ -92,8 +92,6 @@ export const api = {
   deleteExport: (id: string) => request<{ ok: true }>(`/exports/${id}`, { method: "DELETE" }),
   saveCv: (cv: Cv) => request<{ id: string }>("/cv", { method: "PUT", body: JSON.stringify({ cv }) }),
   chat: (body: ChatRequest) => request<ChatResponse>("/chat", { method: "POST", body: JSON.stringify(body) }),
-  saveFact: (body: { requirement: string; answer: string; text: string; placement: string }) =>
-    request<{ id: string }>("/facts", { method: "POST", body: JSON.stringify(body) }),
   writeGap: (body: GapWriteRequest) => request<GapWriteResponse>("/gaps/write", { method: "POST", body: JSON.stringify(body) }),
   adapt: (body: AdaptRequest) => request<AdaptResponse>("/adapt", { method: "POST", body: JSON.stringify(body) }),
   /** Streams suggestions as SSE. Resolves when the "done" event has been delivered. */

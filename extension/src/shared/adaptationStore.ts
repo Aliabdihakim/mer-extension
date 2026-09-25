@@ -70,18 +70,10 @@ export function useAdaptation(adId: string | null) {
       else if (e.type === "rewrite") cur.response.rewrites.push(e.rewrite);
       else if (e.type === "gap") {
         cur.response.gaps.push(e.gap);
-        if (e.gap.prefill && !cur.decisions.gaps[e.gap.id]) {
-          cur.decisions.gaps[e.gap.id] = { status: "added", text: e.gap.prefill.text, answer: e.gap.prefill.answer, placement: e.gap.prefill.placement };
-        }
       }
       else if (e.type === "done") {
         cur.response = e.result;
         cur.loading = false;
-        for (const g of e.result.gaps) {
-          if (g.prefill && !cur.decisions.gaps[g.id]) {
-            cur.decisions.gaps[g.id] = { status: "added", text: g.prefill.text, answer: g.prefill.answer, placement: g.prefill.placement };
-          }
-        }
       }
       else if (e.type === "error") { cur.loading = false; }
       await saveAdaptation(adId, cur);

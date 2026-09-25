@@ -44,17 +44,6 @@ export interface GapSuggestion {
   suggestedSection: "skills" | "summary" | "experience";
   /** The requirement this gap answers, when known. */
   requirementId?: string;
-  /** Filled in when the user already answered this for an earlier ad. */
-  prefill?: { factId: string; answer: string; text: string; placement: string };
-}
-
-/** A remembered answer: the user has this experience, it is just not in the document. */
-export interface UserFact {
-  id: string;
-  requirement: string;
-  answer: string;
-  text: string;
-  placement: string;
 }
 
 /** One requirement from the ad, with a verdict against the CV. */
@@ -186,7 +175,6 @@ export interface MeResponse {
   entitled: boolean;
   trialEnds?: string | null;
   planEnds?: string | null;
-  student: boolean;
 }
 
 /** CV upload: file in, parsed structured CV out (not saved until PUT /cv). */
@@ -222,6 +210,4 @@ export interface ChatRequest {
 export interface ChatResponse {
   reply: string;
   ops: ChatOp[];
-  /** New things the user told us about themselves, to remember for future ads. */
-  facts: { requirement: string; answer: string; text: string; placement: string }[];
 }
