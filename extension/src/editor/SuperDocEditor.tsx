@@ -5,6 +5,7 @@ import type { Mapping, Para } from "./docState";
 import { bundledFamilies, fontMap, fontOptions } from "./fonts";
 
 import { MERITIO_USER, note } from "./brand";
+import { readDocFonts, type DocFonts } from "./docFonts";
 
 /** One of the user's own tracked changes, as listed for the sidebar. */
 export interface UserChange { id: string; type: string; text: string }
@@ -68,6 +69,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
     let destroyed = false;
     const source = p.persisted ? b64ToBytes(p.persisted.docxBase64) : new Uint8Array(p.docx);
     if (p.persisted) tcMap.current = { ...p.persisted.tcMap };
+    readDocFonts(source).then((f) => { docFonts.current = f; });
     const instance = new SuperDoc({
       selector: host.current,
       document: { data: new Blob([source as BlobPart], { type: DOCX }), type: DOCX, name: "cv.docx" },
@@ -129,6 +131,8 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
    * Font and paragraph style of the text at `anchorText`, from the match result's resolved run styles,
    * so inserted lines look exactly like their neighbours.
    */
+  /** Fonts inherited from styles/docDefaults, read from the DOCX itself (query.match only reports run-level fonts). */
+  const docFonts = useRef<DocFonts | null>(null);
   const styleAt = async (anchorText: string): Promise<{ run: any; styleId?: string } | null> => {
     const doc = docRef.current;
     const tail = anchorText.trim().split(/\s+/).slice(-6).join(" ");
@@ -138,9 +142,12 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
       if (!it || it.matchKind !== "text") return null;
       const b = it.blocks?.[0];
       const st = b?.runs?.[0]?.styles;
+      const inherited = docFonts.current?.resolve(b?.paragraphStyle?.styleId) ?? {};
       const run: any = {};
-      if (st?.fontFamily) run.fontFamily = st.fontFamily;
-      if (st?.fontSizePt) run.fontSize = st.fontSizePt;
+      const family = st?.fontFamily ?? inherited.fontFamily;
+      const size = st?.fontSizePt ?? inherited.fontSizePt;
+      if (family) run.fontFamily = family;
+      if (size) run.fontSize = size;
       if (st?.effective?.bold) run.bold = true;
       if (st?.effective?.italic) run.italic = true;
       return { run, styleId: b?.paragraphStyle?.styleId };
