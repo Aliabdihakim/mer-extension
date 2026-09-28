@@ -5,7 +5,15 @@ import type { Mapping, Para } from "./docState";
 import { bundledFamilies, fontMap, fontOptions } from "./fonts";
 
 import { MERITIO_USER, note } from "./brand";
+
+/** Editor messages follow the account language; read once and kept fresh on storage changes. */
+let uiLang: UiLang = "sv";
+readLang().then((l) => { uiLang = l; });
+try { chrome.storage.onChanged.addListener((c, area) => { if (area === "local" && c.lang) uiLang = c.lang.newValue === "en" ? "en" : "sv"; }); } catch {}
+const T = (sv: string, vars?: Record<string, string | number>) => tr(uiLang, sv, vars);
 import { readDocFonts, type DocFonts } from "./docFonts";
+import { tr, readLang } from "../shared/lang";
+import type { UiLang } from "@meritio/shared";
 
 /** One of the user's own tracked changes, as listed for the sidebar. */
 export interface UserChange { id: string; type: string; text: string }
@@ -82,7 +90,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
         docRef.current = instance.activeEditor?.doc ?? null;
         setReady(true);
       },
-      onContentError: ({ error }: any) => propsRef.current.onError("Kunde inte öppna dokumentet: " + (error?.message ?? String(error))),
+      onContentError: ({ error }: any) => propsRef.current.onError(T("Kunde inte öppna dokumentet: {m}", { m: error?.message ?? String(error) })),
       onException: ({ error }: any) => console.error("[meritio] superdoc", error),
       onEditorUpdate: () => schedulePersist(),
     } as any);
@@ -187,11 +195,11 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
     if (!it) {
       // Whitespace/punctuation differences: find the paragraph by content and replace its visible text.
       const b = await findBlock(r.original);
-      if (!b) { propsRef.current.onError(`Förslag för ${r.path} kunde inte placeras: texten hittades inte.`); return; }
+      if (!b) { propsRef.current.onError(T("Förslag för {p} kunde inte placeras: texten hittades inte.", { p: r.path })); return; }
       const vis = visibleText(b).trim();
       const m = await doc.query.match({ select: { type: "text", pattern: vis.slice(0, 120), caseSensitive: true }, require: "first", within: { kind: "block", nodeType: b.type === "heading" || b.type === "listItem" ? b.type : "paragraph", nodeId: b.nodeId } });
       const first = m?.items?.[0];
-      if (!first || first.matchKind !== "text") { propsRef.current.onError(`Förslag för ${r.path} kunde inte placeras.`); return; }
+      if (!first || first.matchKind !== "text") { propsRef.current.onError(T("Förslag för {p} kunde inte placeras.", { p: r.path })); return; }
       // select from the match start to the end of the paragraph's last words
       const tail = await doc.query.match({ select: { type: "text", pattern: vis.split(/\s+/).slice(-3).join(" "), caseSensitive: true }, require: "first", within: { kind: "block", nodeType: b.type === "heading" || b.type === "listItem" ? b.type : "paragraph", nodeId: b.nodeId } });
       const last = tail?.items?.[0];
@@ -200,7 +208,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
     const ids = await tracked(() => doc.replace({ target: it!.target, text: r.proposed }, { changeMode: "tracked" }));
     tcMap.current[r.id] = ids;
     // The reason travels with the change as a comment on it (stripped from the final export).
-    const reason = "Motivering: " + [r.why || r.reason, r.adds && `Lyfter fram ${lc(r.adds)}`, r.removes && `tonar ner ${lc(r.removes)}`].filter(Boolean).join(". ").replace(/\.\./g, ".");
+    const reason = T("Motivering: ") + [r.why || r.reason, r.adds && T("Lyfter fram {a}", { a: lc(r.adds) }), r.removes && T("tonar ner {r}", { r: lc(r.removes) })].filter(Boolean).join(". ").replace(/\.\./g, ".");
     if (ids[0] && reason) await note(doc, ids[0], reason);
   };
 
@@ -257,9 +265,9 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
   const applyGap = async (g: GapSuggestion, text: string, placement: string) => {
     const doc = docRef.current;
     const a = gapAnchor(g, placement);
-    if (!a || !a.text) { propsRef.current.onError(`Kunde inte placera raden för "${g.requirement}": hittar ingen plats i dokumentet.`); return; }
+    if (!a || !a.text) { propsRef.current.onError(T("Kunde inte placera raden för \"{r}\": hittar ingen plats i dokumentet.", { r: g.requirement })); return; }
     const block = await findBlock(a.text);
-    if (!block) { propsRef.current.onError(`Kunde inte placera raden för "${g.requirement}": stycket hittades inte.`); return; }
+    if (!block) { propsRef.current.onError(T("Kunde inte placera raden för \"{r}\": stycket hittades inte.", { r: g.requirement })); return; }
     const blockAddr = { kind: "block", nodeType: block.type === "heading" || block.type === "listItem" ? block.type : "paragraph", nodeId: block.nodeId };
     let ids: string[] = [];
     if (a.mode === "append") {
@@ -268,7 +276,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
       const tailWords = vis.split(/\s+/).slice(-4).join(" ");
       const m = await doc.query.match({ select: { type: "text", pattern: tailWords, caseSensitive: true }, require: "first", within: blockAddr });
       const it = m?.items?.[0];
-      if (!it || it.matchKind !== "text") { propsRef.current.onError(`Kunde inte placera raden för "${g.requirement}": slutet av stycket hittades inte.`); return; }
+      if (!it || it.matchKind !== "text") { propsRef.current.onError(T("Kunde inte placera raden för \"{r}\": slutet av stycket hittades inte.", { r: g.requirement })); return; }
       const sep = placement === "skills" ? ", " : " ";
       const point = it.target.end;
       ids = await tracked(() => doc.insert({ target: { kind: "selection", start: point, end: point }, value: sep + text }, { changeMode: "tracked" }));
@@ -278,8 +286,8 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
       const content = await paragraphLike(node, visibleText(block), text);
       ids = await tracked(() => doc.insert({ target: blockAddr, placement: "after", content }, { changeMode: "tracked" }));
     }
-    if (!ids.length) { propsRef.current.onError(`Raden för "${g.requirement}" kunde inte läggas in.`); return; }
-    await note(doc, ids[0], `Från ditt svar. Annonsen efterfrågar: ${g.requirement}.`);
+    if (!ids.length) { propsRef.current.onError(T("Raden för \"{r}\" kunde inte läggas in.", { r: g.requirement })); return; }
+    await note(doc, ids[0], T("Från ditt svar. Annonsen efterfrågar: {r}.", { r: g.requirement }));
     tcMap.current[g.id] = ids;
     gapApplied.current[g.id] = `${placement}|${text}`;
   };
@@ -295,7 +303,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
     if (key === lastSynced.current) return;
     lastSynced.current = key;
     queue(async () => {
-      propsRef.current.onStatus("Uppdaterar dokumentet…");
+      propsRef.current.onStatus(T("Uppdaterar dokumentet…"));
       if (propsRef.current.persisted) {
         // Resumed: everything in the persisted map was applied earlier; anything decided since is simply gone.
         for (const id of Object.keys(propsRef.current.persisted.tcMap)) applied.current.add(id);
@@ -347,13 +355,13 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
               const it = await findText(op.find) ?? (await findText(op.find.split(/\s+/).slice(0, 6).join(" ")));
               if (!it) continue;
               const ids = await tracked(() => doc.replace({ target: it.target, text: op.text }, { changeMode: "tracked" }));
-              if (ids[0] && op.note) { await note(doc, ids[0], `På din begäran: ${op.note}`); }
+              if (ids[0] && op.note) { await note(doc, ids[0], T("På din begäran: {n}", { n: op.note })); }
               n++;
             } else if (op.type === "delete") {
               const it = await findText(op.find);
               if (!it) continue;
               const ids = await tracked(() => doc.delete({ target: it.target }, { changeMode: "tracked" }));
-              if (ids[0] && op.note) { await note(doc, ids[0], `På din begäran: ${op.note}`); }
+              if (ids[0] && op.note) { await note(doc, ids[0], T("På din begäran: {n}", { n: op.note })); }
               n++;
             } else if (op.type === "insertAfter") {
               // Multi-line text (e.g. a job title line + a bullet) becomes one paragraph per line, in order.
@@ -368,7 +376,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
                 try { node = (await doc.getNodeById({ nodeId: block.nodeId })).node; } catch {}
                 const content = await paragraphLike(node, visibleText(block), line);
                 const ids = await tracked(() => doc.insert({ target: addr, placement: "after", content }, { changeMode: "tracked" }));
-                if (first && ids[0] && op.note) { await note(doc, ids[0], `På din begäran: ${op.note}`); }
+                if (first && ids[0] && op.note) { await note(doc, ids[0], T("På din begäran: {n}", { n: op.note })); }
                 first = false;
                 anchorText = line; // the next line goes after the one just inserted
               }
@@ -414,7 +422,7 @@ export const SuperDocEditor = forwardRef<EditorHandle, Props>(function SuperDocE
 
   return (
     <div className="sd-editor">
-      {!ready && <div className="doc-loading">Öppnar ditt CV…</div>}
+      {!ready && <div className="doc-loading">{T("Öppnar ditt CV…")}</div>}
       <div ref={host} className="sd-host" />
     </div>
   );

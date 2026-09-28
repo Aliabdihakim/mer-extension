@@ -1,4 +1,5 @@
 import type { CurrentAd, ExtMessage } from "@meritio/shared";
+import { tr, readLang } from "../shared/lang";
 
 const BUTTON_ID = "meritio-adapt-btn";
 const OVERLAY_ID = "meritio-overlay";
@@ -7,11 +8,13 @@ export function send(msg: ExtMessage) {
   chrome.runtime.sendMessage(msg).catch(() => {});
 }
 
-export function injectButton(getAd: () => CurrentAd | null) {
+export async function injectButton(getAd: () => CurrentAd | null) {
+  if (document.getElementById(BUTTON_ID)) return;
+  const lang = await readLang();
   if (document.getElementById(BUTTON_ID)) return;
   const btn = document.createElement("button");
   btn.id = BUTTON_ID;
-  btn.innerHTML = `<span style="display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.22);font-weight:800;font-size:13px;margin-right:8px">M</span>Anpassa CV till annonsen`;
+  btn.innerHTML = `<span style="display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.22);font-weight:800;font-size:13px;margin-right:8px">M</span>${tr(lang, "Anpassa CV till annonsen")}`;
   Object.assign(btn.style, {
     position: "fixed", right: "24px", bottom: "24px", zIndex: "2147483647",
     display: "inline-flex", alignItems: "center", padding: "10px 18px 10px 10px",

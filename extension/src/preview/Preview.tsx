@@ -5,10 +5,12 @@ import { api } from "../sidepanel/api";
 import { liveMatch } from "../shared/match";
 import { SuperDocEditor, type EditorHandle, type UserChange } from "../editor/SuperDocEditor";
 import { Chat } from "./Chat";
+import { useLang } from "../shared/i18n";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 export function Preview() {
+  const { t } = useLang();
   const params = new URLSearchParams(location.search);
   const adId = params.get("key") ?? params.get("adId");
   const embedded = params.get("embedded") === "1" || window.parent !== window;
@@ -40,8 +42,8 @@ export function Preview() {
   const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    api.originalDocx().then((b) => b.arrayBuffer()).then(setDocx).catch((e) => setError("Kunde inte hämta ditt CV: " + e.message));
-    api.paragraphs().then(setParas).catch((e) => setError("Kunde inte läsa dokumentets stycken: " + e.message));
+    api.originalDocx().then((b) => b.arrayBuffer()).then(setDocx).catch((e) => setError(t("Kunde inte hämta ditt CV: {m}", { m: e.message })));
+    api.paragraphs().then(setParas).catch((e) => setError(t("Kunde inte läsa dokumentets stycken: {m}", { m: e.message })));
     if (adId) loadPersistedDoc(adId).then(setPersisted); else setPersisted(null);
   }, [adId]);
 
@@ -81,7 +83,7 @@ export function Preview() {
   const match = useMemo(() => liveMatch(stored), [stored]);
 
   if (!adId || !stored) {
-    return <div className="empty">Ingen anpassning hittades. Klicka på Meritio-knappen på en annons först.</div>;
+    return <div className="empty">{t("Ingen anpassning hittades. Klicka på Meritio-knappen på en annons först.")}</div>;
   }
 
   const { ad, cv, rewrites, gaps } = stored.response;
@@ -97,9 +99,9 @@ export function Preview() {
         <span className="ad"><strong>{ad.title}</strong> · {ad.employer}</span>
         {match.total > 0 && (
           <span className="pillwrap">
-            <button className={`matchpill ${match.missing + match.partial > 0 ? "warn" : ""}`} onClick={() => setShowReqs((v) => !v)} title="Visa annonsens krav">
+            <button className={`matchpill ${match.missing + match.partial > 0 ? "warn" : ""}`} onClick={() => setShowReqs((v) => !v)} title={t("Visa annonsens krav")}>
               <span className="bar"><i style={{ width: `${pct}%` }} /></span>
-              {match.covered} av {match.total} krav <span className="caret">▾</span>
+              {t("{c} av {t} krav", { c: match.covered, t: match.total })} <span className="caret">▾</span>
             </button>
             {showReqs && (
               <div className="reqs-pop" onMouseLeave={() => setShowReqs(false)}>
@@ -108,7 +110,7 @@ export function Preview() {
                   {(stored.response.requirements ?? []).map((q) => {
                     const answered = gaps.some((g) => (g.requirementId ?? g.id) === q.id && stored.decisions.gaps[g.id]?.status === "added" && stored.decisions.gaps[g.id]?.text.trim());
                     const st = answered ? "covered" : q.status;
-                    return <li key={q.id} className={`req ${st}`} title={q.evidence ? `I ditt CV: ${q.evidence}` : undefined}><i>{st === "covered" ? "✓" : st === "partial" ? "~" : "–"}</i><span>{q.text}{answered && <em> · tillagt</em>}</span></li>;
+                    return <li key={q.id} className={`req ${st}`} title={q.evidence ? t("I ditt CV: {e}", { e: q.evidence }) : undefined}><i>{st === "covered" ? "✓" : st === "partial" ? "~" : "–"}</i><span>{q.text}{answered && <em>{t(" · tillagt")}</em>}</span></li>;
                   })}
                 </ul>
               </div>
@@ -116,18 +118,18 @@ export function Preview() {
           </span>
         )}
         <span className="spacer" />
-        <span className="ad">{stored.loading ? "Fler förslag på väg…" : status ?? (openCount ? `${openCount} öppna ändringar` : "Inga öppna ändringar")}</span>
-        {openCount > 0 && <button onClick={() => editor.current?.acceptAll()} title="Acceptera alla spårade ändringar i dokumentet">Acceptera alla</button>}
-        <button onClick={() => download("docx")} disabled={!!downloading || !canEdit}>{downloading === "docx" ? "Hämtar…" : "Ladda ner Word"}</button>
-        <button className="primary" onClick={() => download("pdf")} disabled={!!downloading || !canEdit}>{downloading === "pdf" ? "Hämtar…" : "Ladda ner PDF"}</button>
-        <button className="close" title="Stäng (Esc)" onClick={close}>✕</button>
+        <span className="ad">{stored.loading ? t("Fler förslag på väg…") : status ?? (openCount ? t("{n} öppna ändringar", { n: openCount }) : t("Inga öppna ändringar"))}</span>
+        {openCount > 0 && <button onClick={() => editor.current?.acceptAll()} title={t("Acceptera alla spårade ändringar i dokumentet")}>{t("Acceptera alla")}</button>}
+        <button onClick={() => download("docx")} disabled={!!downloading || !canEdit}>{downloading === "docx" ? t("Hämtar…") : t("Ladda ner Word")}</button>
+        <button className="primary" onClick={() => download("pdf")} disabled={!!downloading || !canEdit}>{downloading === "pdf" ? t("Hämtar…") : t("Ladda ner PDF")}</button>
+        <button className="close" title={t("Stäng (Esc)")} onClick={close}>✕</button>
       </div>
 
       {error && <p className="error" style={{ padding: "8px 24px" }}>{error}</p>}
 
       <div className="toolbar-row">
         <div ref={setToolbarEl} className="sd-toolbar" />
-        <span className="doc-hint">Förslagen ligger som spårade ändringar i texten, med motiveringen i bubblan. Acceptera eller avvisa dem där. Det du skriver själv spåras på samma sätt.</span>
+        <span className="doc-hint">{t("Förslagen ligger som spårade ändringar i texten, med motiveringen i bubblan. Acceptera eller avvisa dem där. Det du skriver själv spåras på samma sätt.")}</span>
       </div>
 
       <div className="layout single">
@@ -144,7 +146,7 @@ export function Preview() {
               onError={setError}
             />
           ) : (
-            <div className="doc-loading">Öppnar ditt CV…</div>
+            <div className="doc-loading">{t("Öppnar ditt CV…")}</div>
           )}
         </div>
       </div>

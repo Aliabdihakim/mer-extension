@@ -8,16 +8,20 @@ import { UploadCv } from "./UploadCv";
 import { Brand } from "./Brand";
 import { MyCvs } from "./MyCvs";
 import { liveMatch } from "../shared/match";
+import { useLang, writeLang } from "../shared/i18n";
 
 type Gate = { state: "loading" } | { state: "login" } | { state: "ready"; me: MeResponse } | { state: "error"; message: string };
 
 export function App() {
+  const { t } = useLang();
   const [gate, setGate] = useState<Gate>({ state: "loading" });
 
   const check = useCallback(async () => {
     setGate({ state: "loading" });
     try {
       const me = await api.me();
+      // The account's language wins; an account without one gets what this browser uses.
+      if (me.language) writeLang(me.language); else api.setLanguage((await chrome.storage.local.get("lang")).lang === "en" ? "en" : "sv").catch(() => {});
       setGate({ state: "ready", me });
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setGate({ state: "login" });
@@ -27,15 +31,15 @@ export function App() {
 
   useEffect(() => { check(); }, [check]);
 
-  if (gate.state === "loading") return <><Brand /><p className="muted">Laddar…</p></>;
+  if (gate.state === "loading") return <><Brand /><p className="muted">{t("Laddar…")}</p></>;
   if (gate.state === "login") return <Login onDone={check} />;
   if (gate.state === "error") {
     return (
       <>
         <Brand />
         <div className="card stack">
-          <p className="error">Kunde inte nå servern: {gate.message}</p>
-          <button onClick={check}>Försök igen</button>
+          <p className="error">{t("Kunde inte nå servern: {m}", { m: gate.message })}</p>
+          <button onClick={check}>{t("Försök igen")}</button>
         </div>
       </>
     );
@@ -45,6 +49,8 @@ export function App() {
 }
 
 function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
+  const { t, lang, setLang } = useLang();
+  const pickLang = (l: "sv" | "en") => { setLang(l); api.setLanguage(l).catch(() => {}); };
   const current = useCurrentAd();
   const adId = current ? adKey(current) : null;
   const { stored, applyEvent } = useAdaptation(adId);
@@ -83,18 +89,19 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
   const SITE = import.meta.env.VITE_SITE_URL ?? "http://localhost:3000";
   const daysLeft = me.trialEnds ? Math.max(0, Math.ceil((new Date(me.trialEnds).getTime() - Date.now()) / 86_400_000)) : null;
   const planLine =
-    me.trialing && daysLeft !== null ? `Provperiod · ${daysLeft} dagar kvar`
-    : me.plan === "monthly" ? "Månad" : me.plan === "pass3m" ? "3 månader" : "Ingen aktiv plan";
+    me.trialing && daysLeft !== null ? t("Provperiod · {n} dagar kvar", { n: daysLeft })
+    : me.plan === "monthly" ? t("Månad") : me.plan === "pass3m" ? t("3 månader") : t("Ingen aktiv plan");
   const header = (
     <Brand right={<>{me.email.split("@")[0]}{me.stub ? " · stub" : ""}<br /><a href={`${SITE}/konto`} target="_blank" rel="noreferrer">{planLine}</a></>} />
   );
-  const paywall = !me.entitled || error?.includes("Ingen aktiv plan");
+  const paywall = !me.entitled || error?.includes("Ingen aktiv plan") || error?.includes("PAYMENT_REQUIRED");
   const foot = (
     <p className="foot">
-      <a onClick={() => setShowCvs(true)}>Mina CV</a>
-      <a onClick={() => setShowUpload(true)}>Byt CV</a>
-      <a href="https://github.com/Aliabdihakim/mer-extension" target="_blank" rel="noreferrer" title="Tilläggets källkod (AGPL-3.0)">Källkod</a>
-      {!me.stub && <a onClick={onLogout}>Logga ut</a>}
+      <a onClick={() => setShowCvs(true)}>{t("Mina CV")}</a>
+      <a onClick={() => setShowUpload(true)}>{t("Byt CV")}</a>
+      <a href="https://github.com/Aliabdihakim/mer-extension" target="_blank" rel="noreferrer" title={t("Tilläggets källkod (AGPL-3.0)")}>{t("Källkod")}</a>
+      <a onClick={() => pickLang(lang === "sv" ? "en" : "sv")} title={lang === "sv" ? "Switch to English" : "Byt till svenska"}>{lang === "sv" ? "EN" : "SV"}</a>
+      {!me.stub && <a onClick={onLogout}>{t("Logga ut")}</a>}
     </p>
   );
 
@@ -103,10 +110,10 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
       <>
         {header}
         <div className="card">
-          <div className="eyebrow">Ingen aktiv plan</div>
-          <div className="title">Välj plan för att komma igång</div>
-          <p className="sub" style={{ marginTop: 6 }}>De första 7 dagarna är gratis. Sedan 99 kr/mån eller 199 kr för 3 månader. Avsluta när du vill.</p>
-          <a className="primary big btn-link" href={`${SITE}/konto`} target="_blank" rel="noreferrer">Välj plan</a>
+          <div className="eyebrow">{t("Ingen aktiv plan")}</div>
+          <div className="title">{t("Välj plan för att komma igång")}</div>
+          <p className="sub" style={{ marginTop: 6 }}>{t("De första 7 dagarna är gratis. Sedan 99 kr/mån eller 199 kr för 3 månader. Avsluta när du vill.")}</p>
+          <a className="primary big btn-link" href={`${SITE}/konto`} target="_blank" rel="noreferrer">{t("Välj plan")}</a>
         </div>
         {foot}
       </>
@@ -119,8 +126,8 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
         {header}
         <div className="card empty">
           <div className="icon">🔍</div>
-          <div className="title">Öppna en annons</div>
-          <p className="sub">Gå till en annons på Platsbanken eller Indeed så anpassar Meritio ditt CV till den.</p>
+          <div className="title">{t("Öppna en annons")}</div>
+          <p className="sub">{t("Gå till en annons på Platsbanken eller Indeed så anpassar Meritio ditt CV till den.")}</p>
         </div>
         {foot}
       </>
@@ -133,11 +140,11 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
       <>
         {header}
         <div className="card selected">
-          <div className="eyebrow"><span className="dot" /> Vald annons på Indeed</div>
+          <div className="eyebrow"><span className="dot" /> {t("Vald annons på Indeed")}</div>
           <div className="title">{current.ad?.title}</div>
           <div className="sub">{current.ad?.employer}{current.ad?.location ? ` · ${current.ad.location}` : ""}</div>
-          <p className="sub" style={{ marginTop: 10 }}>Klicka när du vill anpassa ditt CV till den här annonsen.</p>
-          <button className="primary big" onClick={() => setStarted(adId)}>Anpassa CV till annonsen</button>
+          <p className="sub" style={{ marginTop: 10 }}>{t("Klicka när du vill anpassa ditt CV till den här annonsen.")}</p>
+          <button className="primary big" onClick={() => setStarted(adId)}>{t("Anpassa CV till annonsen")}</button>
         </div>
         {foot}
       </>
@@ -161,22 +168,22 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
       <div className="card">
         {data ? (
           <>
-            <div className="eyebrow"><span className="dot" /> {current.source === "indeed" ? "Vald annons på Indeed" : "Annons på Platsbanken"}</div>
+            <div className="eyebrow"><span className="dot" /> {current.source === "indeed" ? t("Vald annons på Indeed") : t("Annons på Platsbanken")}</div>
             <div className="title">{data.ad.title}</div>
             <div className="sub">{data.ad.employer}{data.ad.location ? ` · ${data.ad.location}` : ""}</div>
           </>
         ) : (
           <>
-            <div className="eyebrow">Annons</div>
-            <div className="title muted">Läser annonsen…</div>
+            <div className="eyebrow">{t("Annons")}</div>
+            <div className="title muted">{t("Läser annonsen…")}</div>
           </>
         )}
 
         {hasMatch && (
           <div className="match">
             <div className="row" style={{ marginTop: 0 }}>
-              <span className="muted">Matchning</span>
-              <span><strong>{match.covered}</strong> <span className="muted">av {match.total} krav</span>{match.filled > 0 && <span className="muted"> · {match.filled} tillagda</span>}</span>
+              <span className="muted">{t("Matchning")}</span>
+              <span><strong>{match.covered}</strong> <span className="muted">{t("av {n} krav", { n: match.total })}</span>{match.filled > 0 && <span className="muted">{t(" · {n} tillagda", { n: match.filled })}</span>}</span>
             </div>
             <div className={`bar ${pct < 50 ? "low" : ""}`}><i style={{ width: `${pct}%` }} /></div>
           </div>
@@ -188,31 +195,31 @@ function Adapt({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
             {data!.requirements.map((q) => {
               const answered = data!.gaps.some((g) => (g.requirementId ?? g.id) === q.id && stored?.decisions.gaps[g.id]?.status === "added" && stored?.decisions.gaps[g.id]?.text.trim());
               const st = answered ? "covered" : q.status;
-              return <li key={q.id} className={`req ${st}`} title={q.evidence ? `I ditt CV: ${q.evidence}` : undefined}><i>{st === "covered" ? "✓" : st === "partial" ? "~" : "–"}</i><span>{q.text}</span></li>;
+              return <li key={q.id} className={`req ${st}`} title={q.evidence ? t("I ditt CV: {e}", { e: q.evidence }) : undefined}><i>{st === "covered" ? "✓" : st === "partial" ? "~" : "–"}</i><span>{q.text}</span></li>;
             })}
           </ul>
         )}
 
         {(total > 0 || hasMatch) && (
           <div className="chips">
-            {rewrites > 0 && <span className="chip changes"><i />{rewrites} {rewrites === 1 ? "ändring" : "ändringar"}</span>}
-            {match.partial > 0 && <span className="chip partial"><i />{match.partial} delvis</span>}
-            {match.missing > 0 && <span className="chip gaps"><i />{match.missing} {match.missing === 1 ? "saknas" : "saknas"}</span>}
+            {rewrites > 0 && <span className="chip changes"><i />{rewrites} {rewrites === 1 ? t("ändring") : t("ändringar")}</span>}
+            {match.partial > 0 && <span className="chip partial"><i />{match.partial} {t("delvis")}</span>}
+            {match.missing > 0 && <span className="chip gaps"><i />{match.missing} {t("saknas")}</span>}
           </div>
         )}
 
         {streaming && (
           <ul className="steps">
-            <li className={data ? "done" : "active"}><span className="dot">{data ? "✓" : ""}</span>Läser annonsen</li>
-            <li className={hasMatch ? "done" : data ? "active" : ""}><span className="dot">{hasMatch ? "✓" : ""}</span>Jämför med ditt CV</li>
-            <li className={total > 0 ? "active" : hasMatch ? "active" : ""}><span className="dot" />Skriver förslag{total > 0 ? ` (${total})` : ""}</li>
+            <li className={data ? "done" : "active"}><span className="dot">{data ? "✓" : ""}</span>{t("Läser annonsen")}</li>
+            <li className={hasMatch ? "done" : data ? "active" : ""}><span className="dot">{hasMatch ? "✓" : ""}</span>{t("Jämför med ditt CV")}</li>
+            <li className={total > 0 ? "active" : hasMatch ? "active" : ""}><span className="dot" />{t("Skriver förslag")}{total > 0 ? ` (${total})` : ""}</li>
           </ul>
         )}
 
-        {!streaming && total === 0 && data && <p className="sub" style={{ marginTop: 10 }}>Inga ändringar föreslagna. Ditt CV täcker annonsen bra som det är.</p>}
+        {!streaming && total === 0 && data && <p className="sub" style={{ marginTop: 10 }}>{t("Inga ändringar föreslagna. Ditt CV täcker annonsen bra som det är.")}</p>}
 
         <button className="primary big" onClick={() => openPreview(adId)} disabled={total === 0}>
-          {streaming && total > 0 ? "Granska ändringar · fler på väg" : "Granska ändringar"}
+          {streaming && total > 0 ? t("Granska ändringar · fler på väg") : t("Granska ändringar")}
         </button>
       </div>
       {foot}

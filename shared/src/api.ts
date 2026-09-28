@@ -166,6 +166,9 @@ export type AdaptEvent =
 /** Auth (the API proxies Supabase so the extension needs no Supabase config). */
 export interface AuthRequest { email: string; password: string }
 export interface AuthResponse { accessToken: string; refreshToken: string; email: string }
+/** Languages the UI and the model's panel prose can use. */
+export type UiLang = "sv" | "en";
+
 export interface MeResponse {
   stub: boolean;
   email: string;
@@ -175,6 +178,8 @@ export interface MeResponse {
   entitled: boolean;
   /** Inside the free days of a subscription (card on file, nothing charged yet). */
   trialing: boolean;
+  /** UI language on the account; null until chosen. */
+  language: UiLang | null;
   trialEnds?: string | null;
   planEnds?: string | null;
 }

@@ -70,6 +70,7 @@ export class ApiError extends Error {
 
 export const api = {
   me: () => request<MeResponse>("/me"),
+  setLanguage: (language: "sv" | "en") => request<{ ok: boolean }>("/me/settings", { method: "PUT", body: JSON.stringify({ language }) }),
   oauthUrl: (provider: string, redirect: string) =>
     request<{ url: string }>(`/auth/oauth-url?provider=${encodeURIComponent(provider)}&redirect=${encodeURIComponent(redirect)}`),
   login: (body: AuthRequest) => request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
